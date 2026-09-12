@@ -34,6 +34,8 @@ jobs:
 
   android:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v4
       - uses: subosito/flutter-action@v2
@@ -42,8 +44,13 @@ jobs:
           channel: stable
       - run: flutter pub get
       - run: flutter build apk --release --no-pub
-      - uses: actions/upload-artifact@v4
+      - name: Publish APK release
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: softprops/action-gh-release@v2
         with:
-          name: tuomo-workbench-android-apk
-          path: build/app/outputs/flutter-apk/app-release.apk
-          if-no-files-found: error
+          tag_name: android-build-${{ github.run_number }}
+          name: Tuomo Workbench Android build ${{ github.run_number }}
+          prerelease: true
+          generate_release_notes: false
+          fail_on_unmatched_files: true
+          files: build/app/outputs/flutter-apk/app-release.apk
