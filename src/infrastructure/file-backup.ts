@@ -1,0 +1,17 @@
+import { promises as fs } from 'node:fs';
+import { dirname, isAbsolute, join, relative, resolve } from 'node:path';
+import { createBackup, planRestore, readBackup } from '../application/backup.ts';
+import type { BackupArchive, BackupEntry, RestorePlan } from '../application/backup.ts';
+import { SafeRelativePath } from '../domain/values.ts';
+import { DomainError } from '../domain/errors.ts';
+
+export class FileBackupUseCase {
+  async export(root: string, paths: string[], key?: Uint8Array): Promise<BackupArchive> { const entries: BackupEntry[] = []; for (const input of paths) { const safe = SafeRelativePath.parse(input); const path = join(root, safe.value); const stat = await fs.lstat(path); if (stat.isSymbolicLink()) throw new DomainError('security', `Symbolic links are not allowed in backup: ${safe.value}`); if (stat.isDirectory()) await this.collect(root, safe.value, entries); else entries.push({ path: safe.value, data: await fs.readFile(path, 'utf8') }); } return createBackup(entries, key); }
+  async planRestore(root: string, archive: BackupArchive, key?: Uint8Array): Promise<RestorePlan> { const entries = readBackup(archive, key); const existing = await this.listFiles(root); return planRestore(entries, existing); }
+  async restore(root: string, archive: BackupArchive, key?: Uint8Array): Promise<RestorePlan> { const plan = await this.planRestore(root, archive, key); for (const entry of plan.entries) { const path = await this.safeTarget(root, entry.path); await fs.mkdir(dirname(path), { recursive: true }); const temporary = `${path}.${process.pid}.restore.tmp`; await fs.writeFile(temporary, entry.data, { flag: 'wx' }); await fs.rename(temporary, path); } return plan; }
+  private async collect(root: string, relative: string, entries: BackupEntry[]): Promise<void> { for (const item of await fs.readdir(join(root, relative), { withFileTypes: true })) { const child = `${relative}/${item.name}`; if (item.isSymbolicLink()) throw new DomainError('security', `Symbolic links are not allowed in backup: ${child}`); if (item.isDirectory()) await this.collect(root, child, entries); else entries.push({ path: SafeRelativePath.parse(child).value, data: await fs.readFile(join(root, child), 'utf8') }); } }
+  private async listFiles(root: string, relative = ''): Promise<string[]> { try { const entries: string[] = []; for (const item of await fs.readdir(join(root, relative), { withFileTypes: true })) { const child = relative ? `${relative}/${item.name}` : item.name; if (item.isSymbolicLink()) continue; if (item.isDirectory()) entries.push(...await this.listFiles(root, child)); else entries.push(SafeRelativePath.parse(child).value); } return entries; } catch (error: any) { if (error.code === 'ENOENT') return []; throw error; } }
+  private async safeTarget(root: string, input: string): Promise<string> { const safe = SafeRelativePath.parse(input); const realRoot = await fs.realpath(resolve(root)); const target = resolve(realRoot, safe.value); ensureWithin(realRoot, target); await fs.mkdir(dirname(target), { recursive: true }); ensureWithin(realRoot, await fs.realpath(dirname(target))); try { ensureWithin(realRoot, await fs.realpath(target)); } catch (error: any) { if (error.code !== 'ENOENT') throw error; } return target; }
+}
+
+function ensureWithin(root: string, target: string): void { const value = relative(root, target); if (value === '..' || value.startsWith(`..${process.platform === 'win32' ? '\\' : '/'}`) || isAbsolute(value)) throw new DomainError('security', 'Restore path escapes backup root'); }

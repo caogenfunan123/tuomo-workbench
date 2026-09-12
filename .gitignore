@@ -1,0 +1,14 @@
+node_modules/
+.toolchain/
+.tuomo/
+.dart_tool/
+build/
+coverage/
+*.log
+.DS_Store
+.idea/
+*.iml
+.flutter-plugins
+.flutter-plugins-dependencies
+.packages
+**/local.properties

@@ -1,0 +1,18 @@
+{
+  "name": "tuomo-workbench",
+  "version": "0.1.0",
+  "private": true,
+  "description": "拓墨 (Tuomo) - offline-first writing and multi-site publishing workbench core",
+  "type": "module",
+  "engines": { "node": ">=22" },
+  "scripts": {
+    "test": "node --experimental-strip-types --test test/**/*.test.ts",
+    "test:coverage": "node --experimental-strip-types --experimental-test-coverage --test-coverage-lines=80 --test test/**/*.test.ts",
+    "test:watch": "node --experimental-strip-types --test --watch test/**/*.test.ts",
+    "start": "node --experimental-strip-types src/presentation/cli.ts",
+    "platform:check": "node scripts/platform-contract-check.mjs",
+    "release:check": "node scripts/release-check.mjs",
+    "format:check": "node --experimental-strip-types src/presentation/format-check.ts",
+    "check": "npm run format:check && npm test"
+  }
+}
